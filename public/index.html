@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧋 奶茶店原料配比闯关小游戏</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="game-header">
+      <div class="header-left">
+        <h1>🧋 奶茶配比大师</h1>
+        <span class="subtitle">闯关小游戏</span>
+      </div>
+      <div class="header-center">
+        <div class="level-info">
+          <span class="level-label">当前关卡</span>
+          <span id="currentLevel" class="level-badge">第 1 关</span>
+          <span id="levelName" class="level-name">-</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="levelSelectBtn" class="btn btn-outline">📋 选关</button>
+        <span id="unlockedLevels" class="unlocked-text">已解锁 1/8</span>
+      </div>
+    </header>
+
+    <main class="game-main">
+      <aside class="panel panel-left">
+        <div class="panel-header">
+          <h2>📦 原料仓库</h2>
+          <span class="panel-subtitle" id="ingredientCount">可用原料: 0种</span>
+        </div>
+        <div id="ingredientList" class="ingredient-list">
+        </div>
+      </aside>
+
+      <section class="panel panel-center">
+        <div class="panel-header">
+          <h2>🥤 调配操作台</h2>
+          <div class="action-buttons">
+            <button id="undoBtn" class="btn btn-warning" title="撤销最后一步">↩️ 撤销</button>
+            <button id="clearBtn" class="btn btn-danger" title="清空操作台">🗑️ 清空</button>
+          </div>
+        </div>
+        
+        <div class="workspace">
+          <div id="dropZone" class="drop-zone">
+            <div class="cup-container">
+              <div class="cup">
+                <div class="cup-lip"></div>
+                <div class="cup-body">
+                  <div id="cupContents" class="cup-contents"></div>
+                  <div class="cup-scale">
+                    <span data-level="50">50</span>
+                    <span data-level="100">100</span>
+                    <span data-level="150">150</span>
+                    <span data-level="200">200</span>
+                    <span data-level="250">250</span>
+                    <span data-level="300">300</span>
+                  </div>
+                </div>
+                <div class="cup-base"></div>
+                <div class="straw"></div>
+              </div>
+              <div class="cup-label">调配中</div>
+            </div>
+            <div class="drop-hint" id="dropHint">
+              <p>👆 将左侧原料拖拽到杯子中</p>
+              <p class="hint-small">或点击原料快速添加</p>
+            </div>
+          </div>
+
+          <div id="addedList" class="added-list">
+            <div class="added-header">
+              <h3>已添加原料</h3>
+              <span id="addedCount" class="count-badge">0</span>
+            </div>
+            <div id="addedItems" class="added-items"></div>
+            <div class="validate-section">
+              <button id="validateBtn" class="btn btn-primary btn-large">
+                ✅ 提交配比 / 验证通关
+              </button>
+              <p class="validate-tip">提示：每一关判定规则固定，刻意调配错误配比可快速验证校验逻辑</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel panel-right">
+        <div class="panel-header">
+          <h2>📊 标准配比 vs 当前配比</h2>
+        </div>
+        
+        <div class="recipe-info">
+          <div class="recipe-header">
+            <span id="recipeTitle" class="recipe-title">标准配方</span>
+            <span id="difficultyBadge" class="difficulty-badge">-</span>
+          </div>
+          <p id="recipeDesc" class="recipe-desc">-</p>
+          <p id="toleranceInfo" class="tolerance-info">-</p>
+        </div>
+
+        <div id="comparisonPanel" class="comparison-panel">
+          <div class="comparison-header">
+            <span class="col-ingredient">原料</span>
+            <span class="col-standard">标准</span>
+            <span class="col-current">当前</span>
+            <span class="col-status">状态</span>
+          </div>
+          <div id="comparisonRows" class="comparison-rows">
+            <div class="empty-state">
+              <p>🎯 请先选择关卡查看标准配比</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="lastResult" class="last-result hidden">
+          <h3>上次判定结果</h3>
+          <div id="resultContent"></div>
+        </div>
+      </aside>
+    </main>
+
+    <div id="modal" class="modal hidden">
+      <div class="modal-overlay"></div>
+      <div class="modal-content">
+        <div id="modalHeader" class="modal-header">
+          <h2 id="modalTitle">标题</h2>
+          <button id="modalClose" class="modal-close">✕</button>
+        </div>
+        <div id="modalBody" class="modal-body"></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

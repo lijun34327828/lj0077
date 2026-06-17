@@ -1,0 +1,14 @@
+{
+  "name": "milk-tea-game",
+  "version": "1.0.0",
+  "description": "奶茶店原料配比闯关小游戏",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
