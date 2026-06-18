@@ -14,6 +14,9 @@ class MilkTeaGame {
     this.lastResult = null;
     this.isReady = false;
     this.initError = null;
+    this.timerInterval = null;
+    this.timeRemaining = 0;
+    this.levelRecords = {};
   }
 
   async init() {
@@ -28,6 +31,7 @@ class MilkTeaGame {
         this.maxUnlockedLevel = saved.maxUnlockedLevel || 1;
         this.completedLevels = new Set(saved.completedLevels || []);
         this.currentLevelId = saved.currentLevelId || 1;
+        this.levelRecords = saved.levelRecords || {};
       }
       if (this.currentLevelId > this.levels.length && this.levels.length > 0) {
         this.currentLevelId = 1;
@@ -100,7 +104,9 @@ class MilkTeaGame {
       modalBody: document.getElementById('modalBody'),
       modalClose: document.getElementById('modalClose'),
       modalOverlay: document.querySelector('.modal-overlay'),
-      toast: document.getElementById('toast')
+      toast: document.getElementById('toast'),
+      timerContainer: document.getElementById('timerContainer'),
+      timerDisplay: document.getElementById('timerDisplay')
     };
   }
 
@@ -187,6 +193,8 @@ class MilkTeaGame {
         this.history = [];
         this.validationDetails = {};
         this.lastResult = null;
+        this.stopTimer();
+        this.startTimer(this.currentLevel.timeLimit || 90);
         this.updateLevelInfo();
         this.renderIngredientList();
         this.renderComparison();
@@ -201,6 +209,46 @@ class MilkTeaGame {
       this.showToast('加载关卡失败: ' + (e.message || e), 'error');
       throw e;
     }
+  }
+
+  startTimer(seconds) {
+    this.timeRemaining = seconds;
+    this.updateTimerDisplay();
+    this.els.timerContainer.classList.remove('warning', 'danger', 'timeout');
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+    }
+    this.timerInterval = setInterval(() => {
+      this.timeRemaining--;
+      if (this.timeRemaining <= 0) {
+        this.timeRemaining = 0;
+        this.updateTimerDisplay();
+        this.stopTimer();
+        this.els.timerContainer.classList.add('timeout');
+        this.showToast('⏰ 时间已到！仍可提交，但最高仅获1星', 'warning');
+        return;
+      }
+      this.updateTimerDisplay();
+      const timeLimit = this.currentLevel?.timeLimit || 90;
+      const ratio = this.timeRemaining / timeLimit;
+      this.els.timerContainer.classList.remove('warning', 'danger', 'timeout');
+      if (ratio <= 0.25) {
+        this.els.timerContainer.classList.add('danger');
+      } else if (ratio <= 0.5) {
+        this.els.timerContainer.classList.add('warning');
+      }
+    }, 1000);
+  }
+
+  stopTimer() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+  }
+
+  updateTimerDisplay() {
+    this.els.timerDisplay.textContent = this.timeRemaining;
   }
 
   updateLevelInfo() {
@@ -567,7 +615,8 @@ class MilkTeaGame {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           levelId: this.currentLevelId,
-          userRecipe: this.currentRecipe
+          userRecipe: this.currentRecipe,
+          remainingSeconds: this.timeRemaining
         })
       });
       const json = await res.json();
@@ -597,16 +646,31 @@ class MilkTeaGame {
     this.renderAddedList();
     this.renderLastResult(result);
     if (result.passed) {
+      this.stopTimer();
+      const timeLimit = this.currentLevel.timeLimit || 90;
+      const usedTime = timeLimit - this.timeRemaining;
+      this.updateLevelRecord(this.currentLevelId, result.stars, usedTime, result.score);
       this.completedLevels.add(this.currentLevelId);
       if (this.currentLevelId >= this.maxUnlockedLevel) {
         this.maxUnlockedLevel = Math.min(this.currentLevelId + 1, this.levels.length);
       }
       this.updateUnlockedDisplay();
       this.saveToStorage();
-      this.showPassedModal(result);
+      this.showPassedModal(result, usedTime);
     } else {
       this.showToast(result.message, 'error');
     }
+  }
+
+  updateLevelRecord(levelId, stars, usedTime, score) {
+    const levelIdStr = String(levelId);
+    const existing = this.levelRecords[levelIdStr] || { stars: 0, bestTime: null, bestScore: 0 };
+    const newRecord = {
+      stars: Math.max(existing.stars, stars),
+      bestTime: existing.bestTime === null ? usedTime : Math.min(existing.bestTime, usedTime),
+      bestScore: Math.max(existing.bestScore, score)
+    };
+    this.levelRecords[levelIdStr] = newRecord;
   }
 
   renderLastResult(result) {
@@ -637,9 +701,12 @@ class MilkTeaGame {
     `;
   }
 
-  showPassedModal(result) {
+  showPassedModal(result, usedTime) {
     const isLast = this.currentLevelId >= this.levels.length;
     const nextLevelId = this.currentLevelId + 1;
+    const record = this.levelRecords[String(this.currentLevelId)] || {};
+    const starsHtml = this.renderStars(result.stars);
+    const bestStarsHtml = this.renderStars(record.stars || 0);
     let actionsHtml = '';
     if (isLast) {
       actionsHtml = `
@@ -662,7 +729,24 @@ class MilkTeaGame {
       <div class="passed-celebration">
         <div class="passed-emoji">🧋✨</div>
         <div class="passed-title">完美调配 ${this.currentLevel.name}</div>
-        <div class="passed-subtitle">得分：${result.score} 分 | 已解锁 ${this.maxUnlockedLevel}/${this.levels.length} 关</div>
+        <div class="result-stars">${starsHtml}</div>
+        <div class="passed-subtitle">
+          得分：${result.score} 分 | 用时：${usedTime} 秒 | 已解锁 ${this.maxUnlockedLevel}/${this.levels.length} 关
+        </div>
+        <div class="record-info">
+          <div class="record-item">
+            <span class="record-label">最高星级</span>
+            <span class="record-value">${bestStarsHtml}</span>
+          </div>
+          <div class="record-item">
+            <span class="record-label">最快用时</span>
+            <span class="record-value">${record.bestTime !== null ? record.bestTime + ' 秒' : '-'}</span>
+          </div>
+          <div class="record-item">
+            <span class="record-label">最高得分</span>
+            <span class="record-value">${record.bestScore || 0} 分</span>
+          </div>
+        </div>
         <div style="margin-bottom:24px;">
           <div class="result-card passed" style="display:inline-block;text-align:left;">
             ${result.warnings?.map(w => `<div class="result-success-item">${w}</div>`).join('') || ''}
@@ -674,6 +758,18 @@ class MilkTeaGame {
       </div>
     `;
     this.els.modal.classList.remove('hidden');
+  }
+
+  renderStars(count, max = 3) {
+    let html = '';
+    for (let i = 0; i < max; i++) {
+      if (i < count) {
+        html += '<span class="star star-filled">★</span>';
+      } else {
+        html += '<span class="star star-empty">☆</span>';
+      }
+    }
+    return html;
   }
 
   openLevelSelect() {
@@ -688,13 +784,18 @@ class MilkTeaGame {
       if (isCompleted) classes.push('completed');
       if (isCurrent) classes.push('current');
       const ingsPreview = (level.availableIngredients || []).slice(0, 6).map(id => this.ingredients[id]?.icon || '').join(' ');
+      const record = this.levelRecords[String(level.id)] || { stars: 0 };
+      const starsBadge = this.renderStarsBadge(record.stars || 0);
+      const timeLimit = level.timeLimit || 90;
       html += `
         <div class="${classes.join(' ')}" data-id="${level.id}" ${isLocked ? '' : `onclick="game.closeModal(); game.loadLevel(${level.id});"`}>
+          <div class="level-stars-badge">${starsBadge}</div>
           <div class="level-card-header">
             <div class="level-number">${level.id}</div>
             <div class="level-card-name">${level.name}</div>
           </div>
           <div class="level-card-desc">${level.description}</div>
+          <div class="level-card-time">⏱️ ${timeLimit}秒</div>
           <div class="level-card-footer">
             <span class="difficulty-badge ${level.difficulty}">${level.difficulty}</span>
             <span title="可用原料">${ingsPreview}</span>
@@ -705,6 +806,18 @@ class MilkTeaGame {
     html += '</div>';
     this.els.modalBody.innerHTML = html;
     this.els.modal.classList.remove('hidden');
+  }
+
+  renderStarsBadge(count, max = 3) {
+    let html = '';
+    for (let i = 0; i < max; i++) {
+      if (i < count) {
+        html += '<span class="badge-star badge-star-filled">★</span>';
+      } else {
+        html += '<span class="badge-star badge-star-empty">☆</span>';
+      }
+    }
+    return html;
   }
 
   closeModal() {
@@ -726,7 +839,8 @@ class MilkTeaGame {
       localStorage.setItem('milktea_game', JSON.stringify({
         maxUnlockedLevel: this.maxUnlockedLevel,
         completedLevels: [...this.completedLevels],
-        currentLevelId: this.currentLevelId
+        currentLevelId: this.currentLevelId,
+        levelRecords: this.levelRecords
       }));
     } catch (e) {}
   }

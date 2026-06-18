@@ -160,6 +160,14 @@ const LEVELS = [
   }
 ];
 
+const TIME_LIMITS = {
+  '简单': 90,
+  '中等': 75,
+  '普通': 75,
+  '困难': 60,
+  '大师': 50
+};
+
 app9847.get('/api/ingredients', (req, res) => {
   res.json({ success: true, data: INGREDIENTS });
 });
@@ -171,7 +179,8 @@ app9847.get('/api/levels', (req, res) => {
     description: level.description,
     difficulty: level.difficulty,
     availableIngredients: level.availableIngredients,
-    tolerance: level.tolerance
+    tolerance: level.tolerance,
+    timeLimit: TIME_LIMITS[level.difficulty] || 90
   }));
   res.json({ success: true, data: levels });
 });
@@ -201,13 +210,14 @@ app9847.get('/api/level/:id', (req, res) => {
       difficulty: level.difficulty,
       recipe: recipeWithDetails,
       availableIngredients: level.availableIngredients,
-      tolerance: level.tolerance
+      tolerance: level.tolerance,
+      timeLimit: TIME_LIMITS[level.difficulty] || 90
     }
   });
 });
 
 app9847.post('/api/validate', (req, res) => {
-  const { levelId, userRecipe } = req.body;
+  const { levelId, userRecipe, remainingSeconds } = req.body;
   
   if (!levelId || !userRecipe) {
     return res.status(400).json({ success: false, message: '参数不完整' });
@@ -268,22 +278,48 @@ app9847.post('/api/validate', (req, res) => {
   
   const isPassed = errors.length === 0;
   const score = calculateScore(details, tolerance);
+  const stars = calculateStars(isPassed, score, remainingSeconds, level.difficulty);
   
   res.json({
     success: true,
     data: {
       passed: isPassed,
       score: score,
+      stars: stars,
       errors: errors,
       warnings: warnings,
       details: details,
       levelName: level.name,
       message: isPassed 
-        ? `🎉 恭喜通关【${level.name}】！得分：${score}分` 
+        ? `🎉 恭喜通关【${level.name}】！得分：${score}分，获得${stars}星` 
         : `调配失败，请检查以下问题后重试`
     }
   });
 });
+
+function calculateStars(isPassed, score, remainingSeconds, difficulty) {
+  if (!isPassed) return 0;
+  
+  const timeLimit = TIME_LIMITS[difficulty] || 90;
+  const remaining = typeof remainingSeconds === 'number' ? remainingSeconds : 0;
+  const isTimeout = remaining <= 0;
+  
+  if (isTimeout) {
+    return 1;
+  }
+  
+  const timeRatio = remaining / timeLimit;
+  
+  if (score >= 95 && timeRatio >= 0.5) {
+    return 3;
+  }
+  
+  if (score >= 85 && timeRatio >= 0.25) {
+    return 2;
+  }
+  
+  return 1;
+}
 
 function calculateScore(details, tolerance) {
   let totalWeight = 0;
