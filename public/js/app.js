@@ -12,22 +12,64 @@ class MilkTeaGame {
     this.history = [];
     this.validationDetails = {};
     this.lastResult = null;
-    this.init();
+    this.isReady = false;
+    this.initError = null;
   }
 
   async init() {
-    this.initElements();
-    this.attachEvents();
-    await this.loadIngredients();
-    await this.loadLevels();
-    const saved = this.loadFromStorage();
-    if (saved) {
-      this.maxUnlockedLevel = saved.maxUnlockedLevel || 1;
-      this.completedLevels = new Set(saved.completedLevels || []);
-      this.currentLevelId = saved.currentLevelId || 1;
+    try {
+      this.initElements();
+      this.attachEvents();
+      this.showLoadingState();
+      await this.loadIngredients();
+      await this.loadLevels();
+      const saved = this.loadFromStorage();
+      if (saved) {
+        this.maxUnlockedLevel = saved.maxUnlockedLevel || 1;
+        this.completedLevels = new Set(saved.completedLevels || []);
+        this.currentLevelId = saved.currentLevelId || 1;
+      }
+      if (this.currentLevelId > this.levels.length && this.levels.length > 0) {
+        this.currentLevelId = 1;
+      }
+      await this.loadLevel(this.currentLevelId);
+      this.updateUnlockedDisplay();
+      this.isReady = true;
+      this.hideLoadingState();
+    } catch (e) {
+      console.error('初始化失败:', e);
+      this.initError = e.message || String(e);
+      this.showInitError();
     }
-    await this.loadLevel(this.currentLevelId);
-    this.updateUnlockedDisplay();
+  }
+
+  showLoadingState() {
+    if (this.els?.ingredientCount) {
+      this.els.ingredientCount.textContent = '加载中...';
+    }
+    if (this.els?.comparisonRows) {
+      this.els.comparisonRows.innerHTML = '<div class="empty-state"><p>⏳ 数据加载中...</p></div>';
+    }
+  }
+
+  hideLoadingState() {
+    if (this.els?.ingredientCount) {
+      this.els.ingredientCount.textContent = `可用原料: ${(this.currentLevel?.availableIngredients || []).length}种`;
+    }
+  }
+
+  showInitError() {
+    const msg = this.initError || '未知错误';
+    if (this.els?.ingredientList) {
+      this.els.ingredientList.innerHTML = '';
+    }
+    if (this.els?.ingredientCount) {
+      this.els.ingredientCount.textContent = '加载失败';
+    }
+    if (this.els?.comparisonRows) {
+      this.els.comparisonRows.innerHTML = `<div class="empty-state"><p>❌ 初始化失败</p><p style="font-size:12px;margin-top:8px;color:var(--danger);">${msg}</p><p style="font-size:12px;margin-top:8px;">请检查后端服务是否启动</p></div>`;
+    }
+    this.showToast('游戏初始化失败: ' + msg, 'error');
   }
 
   initElements() {
@@ -97,31 +139,46 @@ class MilkTeaGame {
   async loadIngredients() {
     try {
       const res = await fetch(`${API_BASE}/ingredients`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const json = await res.json();
       if (json.success) {
         this.ingredients = json.data;
+      } else {
+        throw new Error(json.message || '加载原料失败');
       }
     } catch (e) {
       console.error('加载原料失败:', e);
       this.showToast('无法连接到判定服务器，请检查后端服务是否启动', 'error');
+      throw e;
     }
   }
 
   async loadLevels() {
     try {
       const res = await fetch(`${API_BASE}/levels`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const json = await res.json();
       if (json.success) {
         this.levels = json.data;
+      } else {
+        throw new Error(json.message || '加载关卡列表失败');
       }
     } catch (e) {
       console.error('加载关卡失败:', e);
+      throw e;
     }
   }
 
   async loadLevel(levelId) {
     try {
       const res = await fetch(`${API_BASE}/level/${levelId}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const json = await res.json();
       if (json.success) {
         this.currentLevel = json.data;
@@ -136,10 +193,13 @@ class MilkTeaGame {
         this.renderAddedList();
         this.renderCup();
         this.saveToStorage();
+      } else {
+        throw new Error(json.message || '加载关卡失败');
       }
     } catch (e) {
       console.error('加载关卡详情失败:', e);
-      this.showToast('加载关卡失败', 'error');
+      this.showToast('加载关卡失败: ' + (e.message || e), 'error');
+      throw e;
     }
   }
 
@@ -682,7 +742,18 @@ class MilkTeaGame {
 }
 
 let game;
-document.addEventListener('DOMContentLoaded', () => {
+
+function bootstrapGame() {
+  if (game) return;
   game = new MilkTeaGame();
   window.game = game;
-});
+  game.init().catch(e => {
+    console.error('游戏启动失败:', e);
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrapGame);
+} else {
+  bootstrapGame();
+}
